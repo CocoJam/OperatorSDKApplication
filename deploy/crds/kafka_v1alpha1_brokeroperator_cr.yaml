@@ -1,0 +1,7 @@
+apiVersion: kafka.brokers/v1alpha1
+kind: BrokerOperator
+metadata:
+  name: example-brokeroperator
+spec:
+  # Add fields here
+  size: 3

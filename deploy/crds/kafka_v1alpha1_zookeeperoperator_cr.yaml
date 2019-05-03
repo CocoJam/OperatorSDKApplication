@@ -1,0 +1,7 @@
+apiVersion: kafka.zookeeper/v1alpha1
+kind: ZooKeeperOperator
+metadata:
+  name: example-zookeeperoperator
+spec:
+  # Add fields here
+  size: 3
