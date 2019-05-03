@@ -8,7 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	// "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	// "k8s.io/apimachinery/pkg/api/resource"
 	// "k8s.io/apimachinery/pkg/runtime"
 	// "k8s.io/apimachinery/pkg/types"
 	// "sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,8 +45,16 @@ func (ks *kafkaStatefulSet) SpecSelector(ls map[string]string){
 	ks.SpecTemplate.Selector = &ls
 }
 
-func (ks *kafkaStatefulSet) PodTemplateSpec(){
-	ks.ss.Spec.Selector =  &metav1.LabelSelector{
-		MatchLabels: ls,
+func (ks *kafkaStatefulSet) PodTemplateSpecObjectMeta(){
+	ks.ss.Spec.Template.ObjectMeta =  metav1.ObjectMeta{
+		Labels: *ks.SpecTemplate.Selector,
 	}
+}
+
+func (ks *kafkaStatefulSet) PodTemplateSpecSpec(containerAss templates.ContainerAssemble){
+	ks.ss.Spec.Template.Spec.Containers = append(ks.ss.Spec.Template.Spec.Containers, containerAss.Container)
+}
+
+func(ks *kafkaStatefulSet) VolumeClaimTemplates(pvc corev1.PersistentVolumeClaim){
+	ks.ss.Spec.VolumeClaimTemplates = append( ks.ss.Spec.VolumeClaimTemplates, pvc)
 }
