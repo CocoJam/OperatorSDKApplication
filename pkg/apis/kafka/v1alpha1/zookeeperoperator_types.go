@@ -13,6 +13,19 @@ type ZooKeeperOperatorSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
+	Replicas int `json: replicas`
+	ContainerName string `json: conatinerName`
+	Image string `json: image`
+	ContainerPorts map[string]string `json: containerPorts`
+	Heap string `json: heap`
+	LogDir string `json: logDir`
+	DataLogDir string `json: dataLogDir`
+	MountNum int `json: mountNum`
+	Commands []string `json: commands`
+	Args []string `json: args`
+	ClientPort string `json: clientPort`
+	ServerPort string `json: serverPort`
+	LeaderElectionPort string `json: leaderElectionPort`
 }
 
 // ZooKeeperOperatorStatus defines the observed state of ZooKeeperOperator

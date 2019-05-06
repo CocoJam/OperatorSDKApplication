@@ -16,7 +16,7 @@ type BrokerOperatorSpec struct {
 	Replicas int `json: replicas`
 	ContainerName string `json: conatinerName`
 	Image string `json: image`
-	ContainerPorts map[string]int `json: containerPorts`
+	ContainerPorts map[string]string `json: containerPorts`
 	WorkDir string `json: workDir`
 	Heap string `json: heap`
 	ZooKeeperConnect string `json: zooKeeperConnect`

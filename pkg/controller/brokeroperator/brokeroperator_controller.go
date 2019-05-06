@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	kss "github.com/example-inc/app-operator/pkg/controller/templating/KafkaStatefulSet"
 )
 
 var log = logf.Log.WithName("controller_brokeroperator")
@@ -76,138 +77,11 @@ type ReconcileBrokerOperator struct {
 	scheme *runtime.Scheme
 }
 
-type MetaDeployment interface{
-	TypeMeta() metav1.TypeMeta
-	ObjectMeta() metav1.ObjectMeta
-}
-
-type DeploymentMetaTemplate struct{
-	Kind string
-	APIVersion string
-	ObjectName string
-	ObjectNamespace string
-}
-
-func (dmt *DeploymentMetaTemplate) TypeMeta() metav1.TypeMeta{
-	return metav1.TypeMeta{
-		Kind: dmt.Kind,
-		APIVersion: dmt.APIVersion,
-	}
-}
-
-func (dmt *DeploymentMetaTemplate) ObjectMeta() metav1.ObjectMeta{
-	return metav1.ObjectMeta{
-		Name: dmt.ObjectNamespace,
-		Namespace: dmt.ObjectNamespace,
-	}
-}
-
-type Selector interface{
-	Selector() *metav1.LabelSelector
-}
-
-type SpecDeployment interface{
-	Selector() *metav1.LabelSelector
-	PersistentVolumeClaim() corev1.PersistentVolumeClaim
-}
-
-type DeploymentSpecTemplate struct{
-	Replicas int32
-	Selector map[string]string
-	Template corev1.PodTemplateSpec
-	VolumeClaimTemplates []corev1.PersistentVolumeClaim
-	ServiceName string
-	PodManagementPolicy appsv1.PodManagementPolicyType
-	UpdateStrategy 	appsv1.StatefulSetUpdateStrategy
-}
-
-func (sd *DeploymentSpecTemplate) PersistentVolumeClaim() corev1.PersistentVolumeClaim{
-	return corev1.PersistentVolumeClaim{}
-}
-
-type PersistentVolumeClaimSpec interface{
-	AccessModes(AccessModes[]string)
-	Selector(selets map[string]string) *metav1.LabelSelector
-	Resources() corev1.ResourceRequirements
-	VolumeName() string 
-	StorageClassName() *string
-	VolumeMode() *corev1.PersistentVolumeMode
-}
-
-func (pvc *PersistentVolumeClaim) AccessModes(AccessModes[]string){
-	sliceAccess := make([]corev1.PersistentVolumeAccessMode, len(AccessModes))
-	for i,access := range AccessModes{
-		switch access {
-		case string(corev1.ReadWriteOnce):
-			sliceAccess[i] = corev1.ReadWriteOnce
-		case string(corev1.ReadOnlyMany):
-			sliceAccess[i] = corev1.ReadOnlyMany
-		case string(corev1.ReadWriteMany):
-			sliceAccess[i] = corev1.ReadWriteMany
-		default:
-		}
-	}
-	pvc.Spec.AccessModes = sliceAccess
-}
-
-func (pvc *PersistentVolumeClaim) Selector(selets map[string]string){
-	pvc.Spec.Selector = &metav1.LabelSelector{MatchLabels: selets}
-}
-
-func (pvc *PersistentVolumeClaim) Resource(Resources map[string]string ){
-	resourceMap := make(map[corev1.ResourceName]resource.Quantity, len(Resources))
-	
-	for k,v := range Resources{
-		switch k {
-		case string(corev1.ResourceCPU):
-			resourceMap[corev1.ResourceCPU] = resource.Quantity{Format: resource.DecimalSI}
-		case string(corev1.ResourceMemory):
-			resourceMap[corev1.ResourceMemory] = resource.Quantity{Format: resource.DecimalSI}
-		case string(corev1.ResourceStorage):
-			resourceMap[corev1.ResourceStorage] = resource.Quantity{Format: resource.DecimalSI}
-		case string(corev1.ResourceEphemeralStorage):
-			resourceMap[corev1.ResourceEphemeralStorage] = resource.Quantity{Format: resource.DecimalSI}
-		default:
-
-		}
-	}
-	pvc.Spec.Resources.Requests = resourceMap
-}
-
-func (pvc *PersistentVolumeClaim) VolumeName(vol string){
-	pvc.Spec.VolumeName = vol
-}
-func (pvc *PersistentVolumeClaim) StorageClassName(storage *string){
-	pvc.Spec.StorageClassName = storage
-}
-func (pvc *PersistentVolumeClaim) VolumeMode(mode string){
-	switch mode {
-	case string(corev1.PersistentVolumeBlock):
-		pvc.Spec.VolumeMode = &corev1.PersistentVolumeBlock
-	case string(corev1.PersistentVolumeFilesystem):
-		pvc.Spec.VolumeMode = &corev1.PersistentVolumeFilesystem
-	default:
-
-	}
-}
-
-
-type PersistentVolumeClaim struct{
-	dmt *DeploymentMetaTemplate
-	Spec corev1.PersistentVolumeClaimSpec
-	Status corev1.PersistentVolumeClaimStatus
-}
-
-
-type ResourceFunction interface{
-	findResourceFromInstance() (reconcile.Result,error)
-	deployment()(reconcile.Result, error)
-}
-
 type BrokerStatefulSet struct{
 	resourcePtr *appsv1.StatefulSet
 	operatorPtr *kafkav1alpha1.BrokerOperator 
 	r *ReconcileBrokerOperator
+	KafkaStatefulSet *kss.KafkaStatefulSet
 }
 
 
@@ -221,16 +95,52 @@ func (bss *BrokerStatefulSet) findResourceFromInstance()( reconcile.Result,error
 }
 
 
-func (bss *BrokerStatefulSet) deployment(reconcile.Result, error){
-	ss := &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-
-		},
-		ObjectMeta: metav1.ObjectMeta{},
-		Spec: appsv1.StatefulSetSpec{},
-		Status: appsv1.StatefulSetStatus{},
+func (bss *BrokerStatefulSet) deployment(recon reconcile.Result,err error) (reconcile.Result,error){
+	if err != nil && errors.IsNotFound(err) {
+		kssTemplate:= kss.KafkaStatefulSet{}
+		bss.KafkaStatefulSet = &kssTemplate
+		dep := kssTemplate.BootStrap(bss.operatorPtr)
+		bss.resourcePtr = &dep
+		err = bss.r.client.Create(context.TODO(), bss.resourcePtr)
+		return recon, err
 	}
+	return recon,err
 }
+
+
+type BrokerService struct{
+	resourcePtr *corev1.Service
+	operatorPtr *kafkav1alpha1.BrokerOperator 
+	r *ReconcileBrokerOperator
+	KafkaService *kss.KafkaService
+}
+
+func (bss *BrokerService) findResourceFromInstance(headless bool)(reconcile.Result,error){
+	var err error
+	if headless{
+		err := bss.r.client.Get(context.TODO(), types.NamespacedName{Name: bss.operatorPtr.Name+"-headless", Namespace: bss.operatorPtr.Namespace}, bss.resourcePtr)
+	}else{
+		err := bss.r.client.Get(context.TODO(), types.NamespacedName{Name: bss.operatorPtr.Name, Namespace: bss.operatorPtr.Namespace}, bss.resourcePtr)
+	}
+	if err != nil && errors.IsNotFound(err) {
+		return reconcile.Result{}, err
+	}
+	return reconcile.Result{Requeue: true}, err
+}
+
+
+func (bs *BrokerService) deployment(recon reconcile.Result,err error, headless bool) (reconcile.Result,error){
+	if err != nil && errors.IsNotFound(err) {
+		ksTemplate:= kss.KafkaService{}
+		bs.KafkaService = &ksTemplate
+		dep := ksTemplate.BootStrap(bs.operatorPtr, headless)
+		bs.resourcePtr = &dep
+		err = bs.r.client.Create(context.TODO(), bs.resourcePtr)
+		return recon, err
+	}
+	return recon,err
+}
+
 
 // Reconcile reads that state of the cluster for a BrokerOperator object and makes changes based on the state read
 // and what is in the BrokerOperator.Spec
@@ -252,32 +162,55 @@ func (r *ReconcileBrokerOperator) Reconcile(request reconcile.Request) (reconcil
 
 	var bss = BrokerStatefulSet{resourcePtr: &appsv1.StatefulSet{}, operatorPtr: instance, r : r}
 	recon, err = bss.findResourceFromInstance()
-	
-	if(parseReconcile(recon,err)){
-		return recon, err
-	}else{
-		
-	}
-
-	
 	if err != nil && errors.IsNotFound(err) {
-		// Define a new deployment
-		dep := r.deploymentForMemcached(memcached)
-		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-		err = r.client.Create(context.TODO(), dep)
-		if err != nil {
-			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-			return reconcile.Result{}, err
-		}
-		// Deployment created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
+		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", bss.resourcePtr.Namespace, "Deployment.Name", bss.resourcePtr.Name)
+		recon, err = bss.deployment(recon,err)
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get Deployment")
 		return reconcile.Result{}, err
 	}
+	if parseReconcile(recon,err){
+		reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", bss.resourcePtr.Namespace, "Deployment.Name", bss.resourcePtr.Name)
+		return recon, err
+	}
+	if err := controllerutil.SetControllerReference(instance, bss.resourcePtr, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
 
 
+	var bs = BrokerService{resourcePtr: &corev1.Service{}, operatorPtr: instance, r : r}
+	recon, err = bs.findResourceFromInstance(false)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Service.Name", bs.resourcePtr.Name)
+		recon, err = bs.deployment(recon,err,false)
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Deployment")
+		return reconcile.Result{}, err
+	}
+	if parseReconcile(recon,err){
+		reqLogger.Error(err, "Failed to create new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Deployment.Name", bs.resourcePtr.Name)
+		return recon, err
+	}
+	if err := controllerutil.SetControllerReference(instance, bs.resourcePtr, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
 
+	recon, err = bs.findResourceFromInstance(true)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Service.Name", bs.resourcePtr.Name)
+		recon, err = bs.deployment(recon,err,true)
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Deployment")
+		return reconcile.Result{}, err
+	}
+	if parseReconcile(recon,err){
+		reqLogger.Error(err, "Failed to create new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Deployment.Name", bs.resourcePtr.Name)
+		return recon, err
+	}
+	if err := controllerutil.SetControllerReference(instance, bs.resourcePtr, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+	
 	// Define a new Pod object
 	pod := newPodForCR(instance)
 

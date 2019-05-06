@@ -1,5 +1,7 @@
 package templates
 import (
+	"strconv"
+	"fmt"
 	// "reflect"
 	// "context"
 	// er "errors"
@@ -32,6 +34,7 @@ type DeploymentMetaTemplate struct{
 	APIVersion string
 	ObjectName string
 	ObjectNamespace string
+	Labels map[string]string
 }
 
 func (dmt *DeploymentMetaTemplate) TypeMeta() metav1.TypeMeta{
@@ -45,6 +48,7 @@ func (dmt *DeploymentMetaTemplate) ObjectMeta() metav1.ObjectMeta{
 	return metav1.ObjectMeta{
 		Name: dmt.ObjectNamespace,
 		Namespace: dmt.ObjectNamespace,
+		Labels: dmt.Labels,
 	}
 }
 
@@ -84,8 +88,12 @@ func (ASS *ContainerASSemble) ContainerWorkDir(workingDir string){
 	ASS.Container.WorkingDir = workingDir
 }
 
-func ContainerPortGenerator(name string, ContainerPort int) corev1.ContainerPort{
-	container := int32(ContainerPort)
+func ContainerPortGenerator(name string, ContainerPort string) corev1.ContainerPort{
+	i, err := strconv.Atoi(ContainerPort)
+	if err != nil {
+        fmt.Println(err)
+    }
+	container := int32(i)
 	return corev1.ContainerPort{Name: name, ContainerPort: container}
 }
 
