@@ -22,15 +22,15 @@ import (
 )
 
 type StatefulSet struct{
-	meta DeploymentMetaTemplate
+	Meta DeploymentMetaTemplate
 	SS appsv1.StatefulSet
 	SpecTemplate DeploymentSpecTemplate
 }
 
 func (ks *StatefulSet) init(){
-	ks.SS.TypeMeta = ks.meta.TypeMeta()
-	ks.SS.ObjectMeta = ks.meta.ObjectMeta()
-	ks.SpecTemplate.Meta = ks.meta
+	ks.SS.TypeMeta = ks.Meta.TypeMeta()
+	ks.SS.ObjectMeta = ks.Meta.ObjectMeta()
+	ks.SpecTemplate.Meta = ks.Meta
 }
 
 func (ks *StatefulSet) Replicas(num int){
@@ -60,7 +60,7 @@ func(ks *StatefulSet) VolumeClaimTemplates(pvc corev1.PersistentVolumeClaim){
 	ks.SS.Spec.VolumeClaimTemplates = append( ks.SS.Spec.VolumeClaimTemplates, pvc)
 }
 
-func(ks *StatefulSet) bootStrap() appsv1.StatefulSet{
+func(ks *StatefulSet) BootStrap() appsv1.StatefulSet{
 	ks.init()
 	return ks.SS
 } 
