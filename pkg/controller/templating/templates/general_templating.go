@@ -60,45 +60,62 @@ type Selector interface{
 // }
 
 //PodTemplateSpec
-func (pts *PodTemplateSpec) metaPodTemplateSpecs(meta DeploymentMetaTemplate ){
-	pts.pts.ObjectMeta = meta.ObjectMeta()
+func (PTS *PodTemplateSpec) MetaPodTemplateSpecs(ls map[string]string ){
+	PTS.PTS.ObjectMeta = metav1.ObjectMeta{
+		Labels: ls,
+	}
 }
 
-type ContainerAssemble struct{
+// func (PTS *PodTemplateSpec) MetaPodTemplateSpecs(meta DeploymentMetaTemplate ){
+// 	PTS.PTS.ObjectMeta = meta.ObjectMeta()
+// }
+
+type ContainerASSemble struct{
 	Container corev1.Container
 }
 
-func (ass *ContainerAssemble) ImageFactory(name string, image string ){
-	ass.Container.Name = name
-	ass.Container.Image = image
+func (ASS *ContainerASSemble) ImageFactory(name string, image string ){
+	ASS.Container.Name = name
+	ASS.Container.Image = image
 }
 
 
-func (ass *ContainerAssemble) ContainerWorkDir(workingDir string){
-	ass.Container.WorkingDir = workingDir
+func (ASS *ContainerASSemble) ContainerWorkDir(workingDir string){
+	ASS.Container.WorkingDir = workingDir
 }
 
-func (ass *ContainerAssemble) ContainerPort(Ports[]corev1.ContainerPort){
-	ass.Container.Ports = Ports
+func ContainerPortGenerator(name string, ContainerPort int) corev1.ContainerPort{
+	container := int32(ContainerPort)
+	return corev1.ContainerPort{Name: name, ContainerPort: container}
 }
 
-func (ass *ContainerAssemble) CommandWithArgs(command []string, args []string){
-	ass.Container.Command = command
-	ass.Container.Args = args
+func (ASS *ContainerASSemble) ContainerPort(Ports[]corev1.ContainerPort){
+	ASS.Container.Ports = Ports
 }
 
-func (ass *ContainerAssemble) EnvVar(envMap map[string]string){
+func (ASS *ContainerASSemble) CommandWithArgs(command []string, args []string){
+	ASS.Container.Command = command
+	ASS.Container.Args = args
+}
+
+func (ASS *ContainerASSemble) EnvVar(envMap map[string]string){
 	envVarSlice := make([]corev1.EnvVar, len(envMap))
+	if(len(envVarSlice)<1){
+		return
+	}
 	counter :=0
 	for k,v := range envMap{
 		envVarSlice[counter] = corev1.EnvVar{Name: k, Value: v}
 		counter++
 	}
-	ass.Container.Env = append(envVarSlice,  ass.Container.Env...)
+	ASS.Container.Env = append(envVarSlice,  ASS.Container.Env...)
 }
 
-func (ass *ContainerAssemble) EnvVarSourceFieldRef(envMap map[string]string){
+func (ASS *ContainerASSemble) EnvVarSourceFieldRef(envMap map[string]string){
 	envVarSlice := make([]corev1.EnvVar, len(envMap))
+	if(len(envVarSlice)<1){
+		return
+	}
 	counter :=0
 	for k,v := range envMap{
 		envVarSlice[counter] = corev1.EnvVar{
@@ -110,32 +127,44 @@ func (ass *ContainerAssemble) EnvVarSourceFieldRef(envMap map[string]string){
 			}}
 		counter++
 	}
-	ass.Container.Env = append(envVarSlice,  ass.Container.Env...)
+	ASS.Container.Env = append(envVarSlice,  ASS.Container.Env...)
 }
 
-func (ass *ContainerAssemble) VolumeMounts(envMap map[string]string){
+func (ASS *ContainerASSemble) VolumeMounts(envMap map[string]string){
 	VolumeSlice := make([]corev1.VolumeMount, len(envMap))
+	if(len(VolumeSlice)<1){
+		return
+	}
 	counter :=0
 	for k,v := range envMap{
 		VolumeSlice[counter] = corev1.VolumeMount{Name: k, MountPath: v}
 		counter++
 	}
-	ass.Container.VolumeMounts = append(VolumeSlice,  ass.Container.VolumeMounts...)
+	ASS.Container.VolumeMounts = append(VolumeSlice,  ASS.Container.VolumeMounts...)
 }
 
-func (pts *PodTemplateSpec) metaPodTemplateSpecsContainter(Containers []corev1.Container){
-	pts.pts.Spec.Containers = Containers
+func (PTS *PodTemplateSpec) metaPodTemplateSpecsContainter(Containers []corev1.Container){
+	PTS.PTS.Spec.Containers = Containers
 }
 
 
 // PVC templating
-func (pvc *PersistentVolumeClaim) metaPVC(meta DeploymentMetaTemplate){
-	pvc.pvc.TypeMeta = meta.TypeMeta()
-	pvc.pvc.ObjectMeta = meta.ObjectMeta()
+func (PVC *PersistentVolumeClaimASSemble) Meta(metaName string){
+	PVC.PVC.ObjectMeta = metav1.ObjectMeta{
+		Name: metaName,
+	}
 }
 
-func (pvc *PersistentVolumeClaim) AccessModes(AccessModes[]string){
+func (PVC *PersistentVolumeClaimASSemble) metaPVC(meta DeploymentMetaTemplate){
+	PVC.PVC.TypeMeta = meta.TypeMeta()
+	PVC.PVC.ObjectMeta = meta.ObjectMeta()
+}
+
+func (PVC *PersistentVolumeClaimASSemble) AccessModes(AccessModes[]string){
 	sliceAccess := make([]corev1.PersistentVolumeAccessMode, len(AccessModes))
+	if(len(sliceAccess)<1){
+		return
+	}
 	for i,access := range AccessModes{
 		switch access {
 		case string(corev1.ReadWriteOnce):
@@ -147,16 +176,18 @@ func (pvc *PersistentVolumeClaim) AccessModes(AccessModes[]string){
 		default:
 		}
 	}
-	pvc.pvc.Spec.AccessModes = sliceAccess
+	PVC.PVC.Spec.AccessModes = sliceAccess
 }
 
-func (pvc *PersistentVolumeClaim) Selector(selets map[string]string){
-	pvc.pvc.Spec.Selector = &metav1.LabelSelector{MatchLabels: selets}
+func (PVC *PersistentVolumeClaimASSemble) Selector(selets map[string]string){
+	PVC.PVC.Spec.Selector = &metav1.LabelSelector{MatchLabels: selets}
 }
 
-func (pvc *PersistentVolumeClaim) Resource(Resources map[string]string ){
+func (PVC *PersistentVolumeClaimASSemble) Resource(Resources map[string]string ){
 	resourceMap := make(map[corev1.ResourceName]resource.Quantity, len(Resources))
-	
+	if(len(resourceMap)<1){
+		return
+	}
 	for k,_ := range Resources{
 		switch k {
 		case string(corev1.ResourceCPU):
@@ -171,40 +202,72 @@ func (pvc *PersistentVolumeClaim) Resource(Resources map[string]string ){
 
 		}
 	}
-	pvc.pvc.Spec.Resources.Requests = resourceMap
+	PVC.PVC.Spec.Resources.Requests = resourceMap
 }
 
-func (pvc *PersistentVolumeClaim) VolumeName(vol string){
-	pvc.pvc.Spec.VolumeName = vol
+func (PVC *PersistentVolumeClaimASSemble) VolumeName(vol string){
+	PVC.PVC.Spec.VolumeName = vol
 }
-func (pvc *PersistentVolumeClaim) StorageClassName(storage *string){
-	pvc.pvc.Spec.StorageClassName = storage
+func (PVC *PersistentVolumeClaimASSemble) StorageClASSName(storage *string){
+	PVC.PVC.Spec.StorageClassName = storage
 }
 
-// func (pvc *PersistentVolumeClaim) VolumeMode(mode string){
+// func (PVC *PersistentVolumeClaimASSemble) VolumeMode(mode string){
 // 	switch mode {
 // 	case string(corev1.PersistentVolumeBlock):
-// 		pvc.pvc.Spec.VolumeMode = &corev1.PersistentVolumeFilesystem
+// 		PVC.PVC.Spec.VolumeMode = &corev1.PersistentVolumeFilesystem
 // 	case string(corev1.PersistentVolumeFilesystem):
-// 		pvc.pvc.Spec.VolumeMode = corev1.PersistentVolumeFilesystem
+// 		PVC.PVC.Spec.VolumeMode = corev1.PersistentVolumeFilesystem
 // 	default:
 
 // 	}
 // }
 
+//PodManagementPolicy
+
+func(pmp PodManagementPolicy) PodManagementPolicy(pmpType string){
+	switch pmpType{
+	case string(appsv1.OrderedReadyPodManagement):
+		pmp.PMP = appsv1.OrderedReadyPodManagement
+	case string(appsv1.ParallelPodManagement):
+		pmp.PMP = appsv1.ParallelPodManagement
+	}
+}
+
+func(US UpdateStrategy) UpdateStrategy(Type string, RollingUpdate int){
+	switch Type{
+	case string(appsv1.RollingUpdateStatefulSetStrategyType):
+		US.US.Type = appsv1.RollingUpdateStatefulSetStrategyType
+	case string(appsv1.OnDeleteStatefulSetStrategyType):
+		US.US.Type = appsv1.OnDeleteStatefulSetStrategyType
+	}
+	switch {
+	case RollingUpdate>0:
+		num  := int32(RollingUpdate)
+		US.US.RollingUpdate.Partition = &num
+	default:
+	}
+}
+
 type PodTemplateSpec struct{
-	pts corev1.PodTemplateSpec
+	PTS corev1.PodTemplateSpec
 }
 
-
-type PersistentVolumeClaim struct{
-	pvc corev1.PersistentVolumeClaim
+type PersistentVolumeClaimASSemble struct{
+	PVC corev1.PersistentVolumeClaim
 }
 
+type PodManagementPolicy struct{
+	PMP appsv1.PodManagementPolicyType
+}
+
+type UpdateStrategy struct{
+	US appsv1.StatefulSetUpdateStrategy
+}
 
 type DeploymentSpecTemplate struct{
 	Meta DeploymentMetaTemplate
-	Replicas int32
+	Replicas int
 	Selector *map[string]string
 	Template corev1.PodTemplateSpec
 	VolumeClaimTemplates []corev1.PersistentVolumeClaim

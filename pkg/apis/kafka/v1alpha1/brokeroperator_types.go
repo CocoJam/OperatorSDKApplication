@@ -13,7 +13,19 @@ type BrokerOperatorSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-	
+	Replicas int `json: replicas`
+	ContainerName string `json: conatinerName`
+	Image string `json: image`
+	ContainerPorts map[string]int `json: containerPorts`
+	WorkDir string `json: workDir`
+	Heap string `json: heap`
+	ZooKeeperConnect string `json: zooKeeperConnect`
+	LogDir string `json: logDir`
+	MetricReporters string `json: metricReporters`
+	ReposterBootStrapServer string `json: reposterBootStrapServer`
+	MountNum int `json: mountNum`
+	Commands []string `json: commands`
+	Args []string `json: args`
 }
 
 // BrokerOperatorStatus defines the observed state of BrokerOperator
