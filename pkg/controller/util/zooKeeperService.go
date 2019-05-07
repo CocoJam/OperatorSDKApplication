@@ -13,34 +13,35 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"github.com/go-logr/logr"
-	kss "github.com/example-inc/app-operator/pkg/controller/templating/KafkaStatefulSet"
+	kss "github.com/example-inc/app-operator/pkg/controller/templating/ZooKeeperStatefulSet"
 )
 
-type BrokerService struct{
+
+type ZooKeeperService struct{
 	ResourcePtr *corev1.Service
-	OperatorPtr *kafkav1alpha1.BrokerOperator 
-	R *ReconcileBrokerOperator
-	KafkaService *kss.KafkaService
+	OperatorPtr *kafkav1alpha1.ZooKeeperOperator 
+	R *ReconcileZooKeeperOperator
+	KafkaService *kss.ZooKeeperService
 	Headless bool
 }
 
-func(bss BrokerService) getResourcePtr()interface{}{
+func(bss ZooKeeperService) getResourcePtr()interface{}{
 	return bss.OperatorPtr
 }
 
-func (bss BrokerService) getOperatorPtr() interface{}{
+func (bss ZooKeeperService) getOperatorPtr() interface{}{
 	return bss.OperatorPtr
 }
 
-func (bss BrokerService) getReconcileOperator()interface{}{
+func (bss ZooKeeperService) getReconcileOperator()interface{}{
 	return bss.R
 }
 
-func (bss BrokerService) getResourceNameSpace() (string,string){
+func (bss ZooKeeperService) getResourceNameSpace() (string,string){
 	return bss.ResourcePtr.Name, bss.ResourcePtr.Namespace
 }
 
-func (bss BrokerService) findResourceFromInstance()(recon reconcile.Result,err error){
+func (bss ZooKeeperService) findResourceFromInstance()(recon reconcile.Result,err error){
 	if bss.Headless{
 		err = bss.R.Client.Get(context.TODO(), types.NamespacedName{Name: bss.OperatorPtr.Name+"-headless", Namespace: bss.OperatorPtr.Namespace}, bss.ResourcePtr)
 	}else{
@@ -52,9 +53,9 @@ func (bss BrokerService) findResourceFromInstance()(recon reconcile.Result,err e
 	return reconcile.Result{Requeue: true}, err
 }
 
-func (bs BrokerService) deployment(recon reconcile.Result,err error) (reconcile.Result,error){
+func (bs ZooKeeperService) deployment(recon reconcile.Result,err error) (reconcile.Result,error){
 	if err != nil && errors.IsNotFound(err) {
-		ksTemplate:= kss.KafkaService{}
+		ksTemplate:= kss.ZooKeeperService{}
 		bs.KafkaService = &ksTemplate
 		dep := ksTemplate.BootStrap(bs.OperatorPtr, bs.Headless)
 		bs.ResourcePtr = &dep
@@ -64,7 +65,7 @@ func (bs BrokerService) deployment(recon reconcile.Result,err error) (reconcile.
 	return recon,err
 }
 
-func (r BrokerService) SpecConditionalUpdate(con ConditionSpecUpdate,condition bool,reqLogger logr.Logger)  (reconcile.Result,error){
+func (r ZooKeeperService) SpecConditionalUpdate(con ConditionSpecUpdate,condition bool,reqLogger logr.Logger)  (reconcile.Result,error){
 	if condition {
 		err := con(r)
 		if err != nil {
@@ -79,19 +80,20 @@ func (r BrokerService) SpecConditionalUpdate(con ConditionSpecUpdate,condition b
 	return reconcile.Result{}, nil
 }
 
-func (bss BrokerService)GetPodList(podList *corev1.PodList) (error){
-	labelSelector := labels.SelectorFromSet(labelsForBroker(bss.ResourcePtr.Name))
+func (bss ZooKeeperService)GetPodList(podList *corev1.PodList) (error){
+	labelSelector := labels.SelectorFromSet(labelsForZooKeeper(bss.ResourcePtr.Name))
 	listOps := &client.ListOptions{Namespace: bss.ResourcePtr.Namespace, LabelSelector: labelSelector}
 	return bss.R.Client.List(context.TODO(), listOps, podList)
 }
 
-func (bss BrokerService)GetPodListByLabel(podList *corev1.PodList, ls map[string]string) (error){
+func (bss ZooKeeperService)GetPodListByLabel(podList *corev1.PodList, ls map[string]string) (error){
 	labelSelector := labels.SelectorFromSet(ls)
 	listOps := &client.ListOptions{Namespace: bss.ResourcePtr.Namespace, LabelSelector: labelSelector}
 	return bss.R.Client.List(context.TODO(), listOps, podList)
 }
-var _ ResourceGetDeploy = (*BrokerService)(nil)
 
-func labelsForBroker(name string) map[string]string {
-	return 	map[string]string{"app": "Broker", "Kafka_Broker_cr": name}
+var _ ResourceGetDeploy = (*ZooKeeperService)(nil)
+
+func labelsForZooKeeper(name string) map[string]string {
+	return 	map[string]string{"app": "ZooKeeper", "ZooKeeper_cr": name}
 }

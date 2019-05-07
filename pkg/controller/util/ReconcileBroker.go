@@ -15,9 +15,9 @@ type ReconcileBrokerOperator struct {
 	// that reads objects from the cache and writes to the apiserver
 	Client client.Client
 	Scheme *runtime.Scheme
-	ReconcileFunc reconcileFunction
+	ReconcileFunc reconcileBrokerFunction
 }
-type reconcileFunction func(r *ReconcileBrokerOperator,request reconcile.Request) (reconcile.Result, error)
+type reconcileBrokerFunction func(r *ReconcileBrokerOperator,request reconcile.Request) (reconcile.Result, error)
 
 func (r *ReconcileBrokerOperator) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	return r.ReconcileFunc(r,request)
@@ -37,4 +37,3 @@ func (r *ReconcileBrokerOperator) GetBrokerInstance (instance *kafkav1alpha1.Bro
 	}
 	return reconcile.Result{}, err
 }
- 

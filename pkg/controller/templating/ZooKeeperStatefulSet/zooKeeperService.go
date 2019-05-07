@@ -13,7 +13,7 @@ type DefaultZooKeeperService struct{
 	templateSS templates.Service
 }
 
-func(defaultService *DefaultZooKeeperService) bootStrap(zookeeper *kafkav1alpha1.ZooKeeperOperator, headless bool) corev1.Service {
+func(defaultService *ZooKeeperService) BootStrap(zookeeper *kafkav1alpha1.ZooKeeperOperator, headless bool) corev1.Service {
 	ls:= map[string]string{"app": "Zookeeper", "Zookeeper_cr": zookeeper.Name}
 	Service := templates.Service{}
 	meta:= templates.DeploymentMetaTemplate{

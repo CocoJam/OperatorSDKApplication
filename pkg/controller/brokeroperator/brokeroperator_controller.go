@@ -113,7 +113,3 @@ func  Reconcile(r *util.ReconcileBrokerOperator,request reconcile.Request) (reco
 
 	return reconcile.Result{}, nil
 }
-
-func labelsForBroker(name string) map[string]string {
-	return 	map[string]string{"app": "Broker", "Kafka_Broker_cr": name}
-}

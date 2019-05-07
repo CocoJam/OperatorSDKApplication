@@ -17,7 +17,7 @@ type DefaultZooKeeperStatefulSet struct{
 	templateSS templates.StatefulSet
 }
 
-func (defaultBroker *DefaultZooKeeperStatefulSet) bootStrap(zookeeper *kafkav1alpha1.ZooKeeperOperator)  appsv1.StatefulSet{
+func (defaultBroker *ZooKeeperStatefulSet) BootStrap(zookeeper *kafkav1alpha1.ZooKeeperOperator)  appsv1.StatefulSet{
 	ls:= map[string]string{"app": "Zookeeper", "Zookeeper_cr": zookeeper.Name}
 	meta:= templates.DeploymentMetaTemplate{
 		Kind: "StatefulSet",
@@ -50,7 +50,7 @@ func (defaultBroker *DefaultZooKeeperStatefulSet) bootStrap(zookeeper *kafkav1al
 
 	PersistentVolumeClaim:= templates.PersistentVolumeClaimASSemble{}
 	PersistentVolumeClaimSlice := make([]corev1.PersistentVolumeClaim, zookeeper.Spec.MountNum)
-	for i:=0;i < zookeeper.Spec.MountNum; i++{
+	for i:=0;i < int(zookeeper.Spec.MountNum); i++{
 		pvcCompose(zookeeper, &PersistentVolumeClaim, i)
 		PersistentVolumeClaimSlice[i] = PersistentVolumeClaim.PVC
 	}
@@ -71,7 +71,7 @@ func containerCompose(zookeeper *kafkav1alpha1.ZooKeeperOperator,ContainerAss *t
 	ContainerAssemble.ContainerPort(conatinerSlice)
 	ContainerAssemble.CommandWithArgs(zookeeper.Spec.Commands,zookeeper.Spec.Args)
 	EnvMap:=map[string]string{"KAFKA_HEAP_OPTS": zookeeper.Spec.Heap,
-		"ZOOKEEPER_CLIENT_PORT": serverlist(zookeeper, zookeeper.Spec.Replicas),
+		"ZOOKEEPER_CLIENT_PORT": serverlist(zookeeper, int(zookeeper.Spec.Replicas)),
 		"ZOOKEEPER_SERVERS": zookeeper.Spec.LogDir,
 	}
 	ContainerAssemble.EnvVar(EnvMap)
@@ -80,7 +80,7 @@ func containerCompose(zookeeper *kafkav1alpha1.ZooKeeperOperator,ContainerAss *t
 	}
 	ContainerAssemble.EnvVarSourceFieldRef(EnvSourceFieldMap)
 	VolumeMountsMap := make(map[string]string, zookeeper.Spec.MountNum)
-	for i:=0;i < zookeeper.Spec.MountNum; i++{
+	for i:=0;i < int(zookeeper.Spec.MountNum); i++{
 		VolumeMountsMap["datadir-"+string(i)]= "/var/lib/zookeeper/data-"+string(i)
 		VolumeMountsMap["datalogdir-"+string(i)]= "/var/lib/zookeeper/log"+string(i)
 	}
