@@ -33,9 +33,9 @@ func (ks *StatefulSet) init(){
 	ks.SpecTemplate.Meta = ks.Meta
 }
 
-func (ks *StatefulSet) Replicas(num int){
-	replicas  := int32(num)
-	ks.SS.Spec.Replicas = &replicas
+func (ks *StatefulSet) Replicas(num int32){
+	// replicas  := int32(num)
+	ks.SS.Spec.Replicas = &num
 	ks.SpecTemplate.Replicas = num
 }
 

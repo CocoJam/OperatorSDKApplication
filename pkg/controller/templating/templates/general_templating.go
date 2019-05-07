@@ -275,7 +275,7 @@ type UpdateStrategy struct{
 
 type DeploymentSpecTemplate struct{
 	Meta DeploymentMetaTemplate
-	Replicas int
+	Replicas int32
 	Selector *map[string]string
 	Template corev1.PodTemplateSpec
 	VolumeClaimTemplates []corev1.PersistentVolumeClaim

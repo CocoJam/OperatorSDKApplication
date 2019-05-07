@@ -2,12 +2,15 @@ package brokeroperator
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	// er "errors"
 	kafkav1alpha1 "github.com/example-inc/app-operator/pkg/apis/kafka/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"github.com/go-logr/logr"
 	kss "github.com/example-inc/app-operator/pkg/controller/templating/KafkaStatefulSet"
 )
 
@@ -77,6 +81,20 @@ type ReconcileBrokerOperator struct {
 	scheme *runtime.Scheme
 }
 
+type ConditionSpecUpdate = func(r ResourceGetDeploy) error
+
+
+type ResourceGetDeploy interface{
+	getResourcePtr() interface{}
+	getOperatorPtr() *kafkav1alpha1.BrokerOperator
+	getReconcileOperator() interface{}
+	getResourceNameSpace()(string,string)
+	findResourceFromInstance()(reconcile.Result,error)
+	deployment(recon reconcile.Result,err error) (reconcile.Result,error)
+	// ConditionalReconcile(condition bool,)
+	specConditionalUpdate(con ConditionSpecUpdate, condition bool,reqLogger logr.Logger)  (reconcile.Result,error)
+}
+
 type BrokerStatefulSet struct{
 	resourcePtr *appsv1.StatefulSet
 	operatorPtr *kafkav1alpha1.BrokerOperator 
@@ -84,9 +102,22 @@ type BrokerStatefulSet struct{
 	KafkaStatefulSet *kss.KafkaStatefulSet
 }
 
+func(bss BrokerStatefulSet) getResourcePtr() interface{}{
+	return bss.resourcePtr
+}
 
+func (bss BrokerStatefulSet) getOperatorPtr() *kafkav1alpha1.BrokerOperator{
+	return bss.operatorPtr
+}
 
-func (bss *BrokerStatefulSet) findResourceFromInstance()( reconcile.Result,error){
+func (bss BrokerStatefulSet) getReconcileOperator() interface{}{
+	return bss.r
+}
+func (bss BrokerStatefulSet) getResourceNameSpace() (string,string){
+	return bss.resourcePtr.Name, bss.resourcePtr.Namespace
+}
+
+func (bss BrokerStatefulSet) findResourceFromInstance()( reconcile.Result,error){
 	err := bss.r.client.Get(context.TODO(), types.NamespacedName{Name: bss.operatorPtr.Name, Namespace: bss.operatorPtr.Namespace}, bss.resourcePtr)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{}, err
@@ -95,7 +126,7 @@ func (bss *BrokerStatefulSet) findResourceFromInstance()( reconcile.Result,error
 }
 
 
-func (bss *BrokerStatefulSet) deployment(recon reconcile.Result,err error) (reconcile.Result,error){
+func (bss BrokerStatefulSet) deployment(recon reconcile.Result,err error) (reconcile.Result,error){
 	if err != nil && errors.IsNotFound(err) {
 		kssTemplate:= kss.KafkaStatefulSet{}
 		bss.KafkaStatefulSet = &kssTemplate
@@ -108,16 +139,50 @@ func (bss *BrokerStatefulSet) deployment(recon reconcile.Result,err error) (reco
 }
 
 
+func (r BrokerStatefulSet) specConditionalUpdate(con ConditionSpecUpdate,condition bool,reqLogger logr.Logger)  (reconcile.Result,error){
+	if condition {
+		ptrValueOf:= reflect.ValueOf(r.getResourcePtr())
+		ptrType:= ptrValueOf.Type()
+		Name, Namespace:= r.getResourceNameSpace()
+		err := con(r)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Deployment", "Deployment.Namespace", Namespace, "Deployment.Name", Name)
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true}, nil
+	}
+	return reconcile.Result{}, nil
+}
+
+var _ ResourceGetDeploy = (*BrokerStatefulSet)(nil)
+
 type BrokerService struct{
 	resourcePtr *corev1.Service
 	operatorPtr *kafkav1alpha1.BrokerOperator 
 	r *ReconcileBrokerOperator
 	KafkaService *kss.KafkaService
+	Headless bool
 }
 
-func (bss *BrokerService) findResourceFromInstance(headless bool)(reconcile.Result,error){
+func(bss BrokerService) getResourcePtr()interface{}{
+	return bss.resourcePtr
+}
+
+func (bss BrokerService) getOperatorPtr() *kafkav1alpha1.BrokerOperator{
+	return bss.operatorPtr
+}
+
+func (bss BrokerService) getReconcileOperator()interface{}{
+	return bss.r
+}
+
+func (bss BrokerService) getResourceNameSpace() (string,string){
+	return bss.resourcePtr.Name, bss.resourcePtr.Namespace
+}
+
+func (bss BrokerService) findResourceFromInstance()(reconcile.Result,error){
 	var err error
-	if headless{
+	if bss.Headless{
 		err := bss.r.client.Get(context.TODO(), types.NamespacedName{Name: bss.operatorPtr.Name+"-headless", Namespace: bss.operatorPtr.Namespace}, bss.resourcePtr)
 	}else{
 		err := bss.r.client.Get(context.TODO(), types.NamespacedName{Name: bss.operatorPtr.Name, Namespace: bss.operatorPtr.Namespace}, bss.resourcePtr)
@@ -129,11 +194,11 @@ func (bss *BrokerService) findResourceFromInstance(headless bool)(reconcile.Resu
 }
 
 
-func (bs *BrokerService) deployment(recon reconcile.Result,err error, headless bool) (reconcile.Result,error){
+func (bs BrokerService) deployment(recon reconcile.Result,err error) (reconcile.Result,error){
 	if err != nil && errors.IsNotFound(err) {
 		ksTemplate:= kss.KafkaService{}
 		bs.KafkaService = &ksTemplate
-		dep := ksTemplate.BootStrap(bs.operatorPtr, headless)
+		dep := ksTemplate.BootStrap(bs.operatorPtr, bs.Headless)
 		bs.resourcePtr = &dep
 		err = bs.r.client.Create(context.TODO(), bs.resourcePtr)
 		return recon, err
@@ -141,6 +206,41 @@ func (bs *BrokerService) deployment(recon reconcile.Result,err error, headless b
 	return recon,err
 }
 
+func (r BrokerService) specConditionalUpdate(con ConditionSpecUpdate,condition bool,reqLogger logr.Logger)  (reconcile.Result,error){
+	if condition {
+		ptrValueOf:= reflect.ValueOf(r.getResourcePtr())
+		ptrType:= ptrValueOf.Type()
+		Name, Namespace:= r.getResourceNameSpace()
+		err := con(r)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Deployment", "Deployment.Namespace", Namespace, "Deployment.Name", Name)
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true}, nil
+	}
+	return reconcile.Result{}, nil
+}
+
+var _ ResourceGetDeploy = (*BrokerService)(nil)
+
+func GetResourceInstanceDeploy(r ResourceGetDeploy, reqLogger logr.Logger) (reconcile.Result,error){
+	recon, err := r.findResourceFromInstance()
+	ptrValueOf:= reflect.ValueOf(r.getResourcePtr())
+	ptrType:= ptrValueOf.Type()
+	Name, Namespace:= r.getResourceNameSpace()
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Deployment",fmt.Sprintf("%T.Namespace",ptrType), Namespace, fmt.Sprintf("%T.Name",ptrType), Name)
+		recon, err = r.deployment(recon,err)
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Deployment")
+		return reconcile.Result{}, err
+	}
+	if parseReconcile(recon,err){
+		reqLogger.Error(err, "Failed to create new Deployment", fmt.Sprintf("%T.Namespace",ptrType), Namespace, fmt.Sprintf("%T.Name",ptrType), Name)
+		return recon, err
+	}
+	return reconcile.Result{}, err
+}
 
 // Reconcile reads that state of the cluster for a BrokerOperator object and makes changes based on the state read
 // and what is in the BrokerOperator.Spec
@@ -161,56 +261,43 @@ func (r *ReconcileBrokerOperator) Reconcile(request reconcile.Request) (reconcil
 	}
 
 	var bss = BrokerStatefulSet{resourcePtr: &appsv1.StatefulSet{}, operatorPtr: instance, r : r}
-	recon, err = bss.findResourceFromInstance()
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", bss.resourcePtr.Namespace, "Deployment.Name", bss.resourcePtr.Name)
-		recon, err = bss.deployment(recon,err)
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get Deployment")
-		return reconcile.Result{}, err
-	}
-	if parseReconcile(recon,err){
-		reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", bss.resourcePtr.Namespace, "Deployment.Name", bss.resourcePtr.Name)
-		return recon, err
-	}
+	recon, err = GetResourceInstanceDeploy(bss, reqLogger)
 	if err := controllerutil.SetControllerReference(instance, bss.resourcePtr, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
+	size := instance.Spec.Replicas
+	// ConditionSpecUpdate := func(r ResourceGetDeploy) error{
+		*bss.resourcePtr.Spec.Replicas = size
+		// err = r.client.Update(context.TODO(), found)
+	// }
+	// if *bss.resourcePtr.Spec.Replicas != size {
+	// 	*bss.resourcePtr.Spec.Replicas = &size
+	// 	err = r.client.Update(context.TODO(), found)
+	// 	if err != nil {
+	// 		reqLogger.Error(err, "Failed to update Deployment", "Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+	// 		return reconcile.Result{}, err
+	// 	}
+	// 	return reconcile.Result{Requeue: true}, nil
+	// }
 
-	var bs = BrokerService{resourcePtr: &corev1.Service{}, operatorPtr: instance, r : r}
-	recon, err = bs.findResourceFromInstance(false)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Service.Name", bs.resourcePtr.Name)
-		recon, err = bs.deployment(recon,err,false)
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get Deployment")
-		return reconcile.Result{}, err
-	}
-	if parseReconcile(recon,err){
-		reqLogger.Error(err, "Failed to create new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Deployment.Name", bs.resourcePtr.Name)
-		return recon, err
-	}
+	var bs = BrokerService{resourcePtr: &corev1.Service{}, operatorPtr: instance, r : r, Headless: false}
+	recon, err = GetResourceInstanceDeploy(bs, reqLogger)
 	if err := controllerutil.SetControllerReference(instance, bs.resourcePtr, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	recon, err = bs.findResourceFromInstance(true)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Service.Name", bs.resourcePtr.Name)
-		recon, err = bs.deployment(recon,err,true)
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get Deployment")
-		return reconcile.Result{}, err
-	}
-	if parseReconcile(recon,err){
-		reqLogger.Error(err, "Failed to create new Service", "Service.Namespace", bs.resourcePtr.Namespace, "Deployment.Name", bs.resourcePtr.Name)
-		return recon, err
-	}
+	bs.Headless = true
+	recon, err = GetResourceInstanceDeploy(bs, reqLogger)
 	if err := controllerutil.SetControllerReference(instance, bs.resourcePtr, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
-	
+
+	podList := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(labelsForBroker(instance.Name))
+	listOps := &client.ListOptions{Namespace: instance.Namespace, LabelSelector: labelSelector}
+	err = r.client.List(context.TODO(), listOps, podList)
+
 	// Define a new Pod object
 	pod := newPodForCR(instance)
 
@@ -294,4 +381,7 @@ func newPodForCR(cr *kafkav1alpha1.BrokerOperator) *corev1.Pod {
 			},
 		},
 	}
+}
+func labelsForBroker(name string) map[string]string {
+	return 	map[string]string{"app": "Broker", "Kafka_Broker_cr": name}
 }
